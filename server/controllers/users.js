@@ -19,22 +19,23 @@ const bcrypt = require('bcrypt');
 const User = mongoose.model('User');
 
 module.exports = {
-  // EXAMPLE OF A CRUD get REQUEST method:
   login(request, response) {
     User.findOne({ email: request.body.email }).then((user) => {
       if (user) {
         bcrypt.compare(request.body.password, user.hash).then((res) => {
           if (res) {
             request.session.user = user.email;
-            response.redirect('/admin/dashboard');
+            response.json({
+              email: user.email,
+              admin: user.admin,
+              id: user.id,
+            });
           } else {
-            request.flash('error', 'Incorrect password or username');
-            response.redirect('/admin');
+            response.json({ error: 'error' });
           }
         });
       } else {
-        request.flash('error', 'Incorrect password or username');
-        response.redirect('/admin');
+        response.json({ error: 'error' });
       }
     });
   },
@@ -43,63 +44,65 @@ module.exports = {
       User.find()
         .sort({ admin: -1 })
         .then((users) => {
-          response.render('dashboard', {
-            user,
-            users,
-            message: request.flash('exists'),
-          });
+          const userList = users.map(user => ({
+            email: user.email,
+            admin: user.admin,
+            id: user.id,
+          }));
+          response.json(userList);
         });
     });
   },
   newUser(request, response) {
     User.findOne({ email: request.session.email }).then(() => {
-      User.findOne({ email: request.body.newuseremail }).then((user) => {
+      User.findOne({ email: request.body.email }).then((user) => {
         if (!user) {
-          const admin = this.getAdminCode(request.body.newuseradmin);
+          const admin = this.getAdminCode(request.body.admin);
           bcrypt.hash('default', 10).then((newHash) => {
             User.create({
-              email: request.body.newuseremail,
+              email: request.body.email,
               admin,
               hash: newHash,
             }).then((newUser) => {
-              request.flash('exists', `Successfully added ${newUser.email}.`);
-              response.redirect('admin/dashboard');
+              const { email, admin, id } = newUser;
+              const userResult = {
+                email,
+                admin,
+                id,
+              };
+              response.json(userResult);
             });
           });
         } else {
-          request.flash(
-            'exists',
-            `Could not add user ${user.email}. Username already exists in database.`,
-          );
-          response.redirect('admin/dashboard');
+          response.json({ error: 'error' });
         }
       });
     });
   },
   editUser(request, response) {
     User.findOne({ email: request.session.user }).then((adminUser) => {
-      User.findOne({ email: request.body.edituseremail }).then((updateUser) => {
+      User.findOne({ email: request.body.email }).then((updateUser) => {
         if (updateUser) {
-          bcrypt.hash(request.body.edituserpassword, 10).then((newHash) => {
-            const admin = this.getAdminCode(request.body.edituseradmin);
+          bcrypt.hash(request.body.password, 10).then((newHash) => {
+            const admin = this.getAdminCode(request.body.admin);
             if (adminUser.admin > updateUser.admin) {
               updateUser.hash = newHash;
               updateUser.admin = admin;
-              updateUser.save().then((user) => {
-                request.flash('exists', `Successfully edited account details for ${user.email}.`);
-                response.redirect('admin/dashboard');
+              updateUser.save().then((editedUser) => {
+                const { email, admin, id } = editedUser;
+                const userResult = {
+                  email,
+                  admin,
+                  id,
+                };
+                response.json(userResult);
               });
             } else {
-              request.flash(
-                'exists',
-                'You not have adequate permissions to perform this operation.',
-              );
-              response.redirect('admin/dashboard');
+              response.json({ error: 'error' });
             }
           });
         } else {
-          request.flash('exists', `Could not find user ${request.body.edituseremail}.`);
-          response.redirect('admin/dashboard');
+          response.json({ error: 'error' });
         }
       });
     });
@@ -122,15 +125,14 @@ module.exports = {
   promote(request, response, type) {
     User.findOne({ email: request.session.user }).then((adminUser) => {
       User.findOne({ _id: request.params.id }).then((user) => {
-        if (adminUser.admin > user.admin) {
+        if (adminUser.admin > user.admin && user.admin + type < 10 && user.admin + type > 7) {
           user.admin += type;
           user.save().then((savedUser) => {
             const promotion = type < 0 ? 'demoted' : 'promoted';
-            request.flash('exists', `Successfully ${promotion} ${savedUser.email}.`);
-            response.redirect('/admin/dashboard');
+            response.json({ message: `Successfully ${promotion} ${savedUser.email}.` });
           });
         } else {
-          response.redirect('/admin/dashboard');
+          response.json({ error: 'error' });
         }
       });
     });
@@ -141,12 +143,11 @@ module.exports = {
         if (adminUser.admin > user.admin) {
           User.remove({ _id: user.id })
             .then(() => {
-              request.flash('exists', `Successfully deleted ${user.email}.`);
-              response.redirect('/admin/dashboard');
+              response.json({ message: `Successfully deleted ${user.email}.` });
             })
             .catch(error => console.log(error));
         } else {
-          response.redirect('/admin/dashboard');
+          response.json({ error: 'error' });
         }
       });
     });
@@ -155,14 +156,13 @@ module.exports = {
     User.findOne({ _id: request.params.id })
       .then((user) => {
         if (user) {
-          var isadmin;
+          let isadmin;
           if (request.session.user) {
             isadmin = true;
-          }
-          else {
+          } else {
             isadmin = false;
           }
-          var tiles = require('../../static/tiles.json');
+          const tiles = require('../../static/tiles.json');
           response.render('board', {
             id: user.id,
             admin: isadmin,
@@ -176,7 +176,8 @@ module.exports = {
             starsbottom: tiles.sideone.starsbottom,
             dipper: tiles.sideone.dipper,
             crescent: tiles.sideone.crescent,
-            earth: tiles.sideone.earth});
+            earth: tiles.sideone.earth,
+          });
         } else {
           response.redirect('admin');
         }

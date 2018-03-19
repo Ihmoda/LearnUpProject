@@ -17,11 +17,11 @@ module.exports = function (app) {
     response.render('index');
   });
 
-  app.get('/admin/dashboard', (request, response) => {
+  app.get('/users', (request, response) => {
     if (request.session.user) {
       users.dashboard(request, response);
     } else {
-      response.redirect('/admin');
+      response.json({ error: 'error' });
     }
   });
   // Admin route - renders admin.ejs:
@@ -48,23 +48,23 @@ module.exports = function (app) {
   });
 
   // New user post route
-  app.post('/new', (request, response) => {
+  app.post('/users/new', (request, response) => {
     users.newUser(request, response);
   });
 
-  app.post('/edit', (request, response) => {
+  app.post('/users/edit', (request, response) => {
     users.editUser(request, response);
   });
 
-  app.post('/promote/:id', (request, response) => {
+  app.post('/users/promote/:id', (request, response) => {
     users.promote(request, response, 1);
   });
 
-  app.post('/demote/:id', (request, response) => {
+  app.post('/users/demote/:id', (request, response) => {
     users.promote(request, response, -1);
   });
 
-  app.post('/delete/:id', (request, response) => {
+  app.post('/users/delete/:id', (request, response) => {
     users.delete(request, response);
   });
 };
